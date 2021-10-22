@@ -9,7 +9,7 @@ from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.arena.arena import Arena
 
 from players.minmax_agent import MinMaxAgent
-from players.rule_based_agent import RuleBasedAgent
+from players.rule_based_agent import RuleBasedAgent, RuleBasedAgentPatrik
 
 
 def main():
@@ -18,7 +18,8 @@ def main():
 
     # setup the arena
     arena = Arena(nr_games_to_play=1000, save_filename='arena_games')
-    team0 = AgentRandomSchieber()
+    #team0 = AgentRandomSchieber()
+    team0 = RuleBasedAgentPatrik()
     team1 = RuleBasedAgent()
 
     arena.set_players(team0, team1, team0, team1)
