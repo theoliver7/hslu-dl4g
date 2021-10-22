@@ -48,28 +48,19 @@ class MinMaxAgent(Agent):
         else:
             return best_color
 
-    def action_play_card(self, obs: GameObservation) -> int:
+    def action_play_card(self, state: GameState) -> int:
         """
-        Determine the card to play.
+        Determine the card to play for this trick with the minmax algorithm
 
         Args:
-            obs: the game observation
+            state: the game state where all hands of all players can be seen
 
         Returns:
             the card to play, int encoded as defined in jass.game.const
         """
-        valid_cards = self._rule.get_valid_cards_from_obs(obs)
-        hand_cards = convert_one_hot_encoded_cards_to_int_encoded_list(valid_cards)
-        string_cards = convert_one_hot_encoded_cards_to_str_encoded_list(valid_cards)
-
-        card_scores = []
-        for card in hand_cards:
-            if color_of_card[card] == obs.trump:
-                card_scores.append(self.trump_score[offset_of_card[card]])
-            else:
-                card_scores.append(self.no_trump_score[offset_of_card[card]])
-        card = np.argmax(card_scores)
-        return hand_cards[card]
+        valid_cards = self._rule.get_valid_cards_from_state(state)
+        # out of the valid cards find the best one to play when looking into cards of the other players
+        return self.get_card_minmax(state)
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         # add your code here
@@ -81,3 +72,13 @@ class MinMaxAgent(Agent):
                 trump_selection_score += self.no_trump_score[offset_of_card[card]]
 
         return trump_selection_score
+
+    def __get_card_minmax(self, state: GameState):
+        """
+        Determine the card to play after analysis of all hands of the players
+
+        :param state: the game state where all hands of all players can be seen
+        :return: the card to play, according to the minmax solution algorithm
+        """
+        # look into the hands from the other players and depending on that take best card
+        raise NotImplementedError
