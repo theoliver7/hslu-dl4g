@@ -6,6 +6,7 @@ from jass.game.game_state import GameState
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list, \
     convert_one_hot_encoded_cards_to_str_encoded_list, count_colors
 from jass.game.rule_schieber import RuleSchieber
+from players.node import Node
 
 
 # Trump selection:  by assigning a value to each card, depending on whether the color is trump or not.
@@ -58,9 +59,10 @@ class MinMaxAgent(Agent):
         Returns:
             the card to play, int encoded as defined in jass.game.const
         """
-        valid_cards = self._rule.get_valid_cards_from_state(state)
+        self.__create_game_tree(state)
         # out of the valid cards find the best one to play when looking into cards of the other players
-        return self.get_card_minmax(state)
+        # call minmax to find out the best card (child node) to play
+        return 0
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         # add your code here
@@ -73,12 +75,32 @@ class MinMaxAgent(Agent):
 
         return trump_selection_score
 
-    def __get_card_minmax(self, state: GameState):
+    def __get_card_minmax(self, node: Node):
         """
         Determine the card to play after analysis of all hands of the players
 
-        :param state: the game state where all hands of all players can be seen
+        :param node: the root node of the game tree with all possible tricks
         :return: the card to play, according to the minmax solution algorithm
         """
         # look into the hands from the other players and depending on that take best card
         raise NotImplementedError
+
+    def __create_game_tree(self, state: GameState):
+        all_hands = state.hands
+        root = Node()
+        print("player: {}", state.player)
+        player_hand = self._rule.get_valid_cards(all_hands[state.player],
+                                                      state.current_trick,
+                                                      state.nr_cards_in_trick,
+                                                      state.trump)
+
+        for valid_card in convert_one_hot_encoded_cards_to_str_encoded_list(player_hand):
+            print(valid_card)
+            node = Node()
+            node.parent = root
+            node.card = valid_card
+            # append to root
+            root.children.append(node)
+
+            # find out which player is next and append his valid cards to this nodes children
+            # and so on for the next players
