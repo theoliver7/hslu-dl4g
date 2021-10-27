@@ -105,6 +105,7 @@ class CheatingMCTSAgent(Agent):
             if len(selected_node.get_children()) < 8:
                 # Expansion
                 self.__expand_node(selected_node, game_sim)
+                selected_node = np.random.choice(selected_node.get_children())
             # Simulation
             score = self.__simulate_play(selected_node)
             # Backpropagation
@@ -132,7 +133,7 @@ class CheatingMCTSAgent(Agent):
         print(player_hand)
 
         available_cards = convert_one_hot_encoded_cards_to_str_encoded_list(player_hand)
-        sim_copy = copy.deepcopy(sim)
+        card = np.random.choice(available_cards)
         for card in available_cards:
             print("_________________________________________",card_ids.get(card))
             sim_copy = copy.deepcopy(sim)
