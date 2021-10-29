@@ -6,7 +6,7 @@ from jass.game.game_state import GameState
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list, \
     convert_one_hot_encoded_cards_to_str_encoded_list, count_colors
 from jass.game.rule_schieber import RuleSchieber
-from players.node import Node
+from players.mcts_node import MCTSNode
 
 
 # Trump selection:  by assigning a value to each card, depending on whether the color is trump or not.
@@ -75,7 +75,7 @@ class MinMaxAgent(Agent):
 
         return trump_selection_score
 
-    def __get_card_minmax(self, node: Node):
+    def __get_card_minmax(self, node: MCTSNode):
         """
         Determine the card to play after analysis of all hands of the players
 
@@ -87,7 +87,7 @@ class MinMaxAgent(Agent):
 
     def __create_game_tree(self, state: GameState):
         all_hands = state.hands
-        root = Node()
+        root = MCTSNode()
         print("player: {}", state.player)
         player_hand = self._rule.get_valid_cards(all_hands[state.player],
                                                       state.current_trick,
@@ -96,7 +96,7 @@ class MinMaxAgent(Agent):
 
         for valid_card in convert_one_hot_encoded_cards_to_str_encoded_list(player_hand):
             print(valid_card)
-            node = Node()
+            node = MCTSNode()
             node.parent = root
             node.card = valid_card
             # append to root
