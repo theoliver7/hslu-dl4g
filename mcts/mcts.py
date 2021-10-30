@@ -6,7 +6,7 @@ from jass.game.game_sim import GameSim
 from jass.game.game_state import GameState
 from jass.game.rule_schieber import RuleSchieber
 
-from players.mcts.mcts_node import MCTSNode
+from mcts.mcts_node import MCTSNode
 
 
 class MonteCarloTreeSearch:
