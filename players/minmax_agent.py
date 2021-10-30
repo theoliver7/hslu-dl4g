@@ -1,12 +1,11 @@
-import numpy as np
 from jass.agents.agent import Agent
-from jass.game.const import PUSH, color_of_card, offset_of_card, DJ, HJ, SJ, CJ
+from jass.game.const import PUSH, color_of_card, offset_of_card
 from jass.game.game_observation import GameObservation
 from jass.game.game_state import GameState
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list, \
-    convert_one_hot_encoded_cards_to_str_encoded_list, count_colors
+    convert_one_hot_encoded_cards_to_str_encoded_list
 from jass.game.rule_schieber import RuleSchieber
-from players.mcts_node import MCTSNode
+from players.mcts.mcts_node import MCTSNode
 
 
 # Trump selection:  by assigning a value to each card, depending on whether the color is trump or not.
