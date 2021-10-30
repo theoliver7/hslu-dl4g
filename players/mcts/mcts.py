@@ -1,0 +1,99 @@
+import time
+
+from jass.agents.agent_random_schieber import AgentRandomSchieber
+from jass.game.const import card_ids
+from jass.game.game_sim import GameSim
+from jass.game.game_state import GameState
+from jass.game.rule_schieber import RuleSchieber
+
+from players.mcts.mcts_node import MCTSNode
+
+
+class MonteCarloTreeSearch:
+    def search(self, game_state: GameState, iterations=300, seconds_limit=0.0):
+        """
+        Determine the card to play after analysis of all hands of the players
+        Args:
+            game_state: current game state
+            iterations: number of iterations to do search
+            seconds_limit: If set time which the search will run
+        Returns:
+            Best card to play according to mcts
+        """
+        tree = MCTSNode(state=game_state)
+
+        if seconds_limit == 0.0:
+            for i in range(iterations):
+                # Selection & Expansion
+                node_to_simulate = self._tree_policy(tree)
+                # Simulation
+                score = self.__simulate_play(node_to_simulate, game_state.player)
+                # Backpropagation
+                self.__back_propagation(node_to_simulate, score)
+        else:
+            cut_off_time = time.time() + seconds_limit
+            while time.time() < cut_off_time:
+                node_to_simulate = self._tree_policy(tree)
+                # Simulation
+                score = self.__simulate_play(node_to_simulate, game_state.player)
+                # Backpropagation
+                self.__back_propagation(node_to_simulate, score)
+
+        node = self.__get_most_simulated_node(tree)
+        return card_ids.get(node.get_card())
+
+    def _tree_policy(self, node: MCTSNode):
+        """
+        :param node: root node from which to find best next best one
+        :return: most promising node to explore
+        -------
+        """
+        current_node = node
+        while not current_node.is_terminal_node():
+            if not current_node.is_fully_expanded():
+                return current_node.expand()
+            else:
+                current_node = current_node.best_child_ubc()
+        return current_node
+
+    def __simulate_play(self, node: MCTSNode, simulating_player: int):
+        """
+        :param node: selected node which simulated
+        :param simulating_player: player which started mcts simulation
+        :return: outcome of play
+        -------
+        """
+        game_sim = GameSim(rule=RuleSchieber())
+        game_sim.init_from_state(node.get_state())
+
+        random_player = AgentRandomSchieber()
+
+        while not game_sim.is_done():
+            game_sim.action_play_card(random_player.action_play_card(game_sim.get_observation()))
+
+        if simulating_player % 2 == 0:
+            # normalize points
+            return game_sim.state.points[0] / sum(game_sim.state.points)
+        else:
+            # normalize points
+            return game_sim.state.points[1] / sum(game_sim.state.points)
+
+    def __back_propagation(self, node: MCTSNode, score: int):
+        """
+        :param node: node which payoff was calculated
+        :param score: the score that was achieved in simulation
+        -------
+        """
+        tmp_node = node
+        while tmp_node is not None:
+            tmp_node.increment_simulation_cnt()
+            tmp_node.set_win_score(score)
+            tmp_node = tmp_node.get_parent()
+
+    def __get_most_simulated_node(self, tree: MCTSNode):
+        most_simulated = MCTSNode()
+        child: MCTSNode
+        for child in tree.get_children():
+            if child.get_simulation_cnt() > most_simulated.get_simulation_cnt():
+                most_simulated = child
+        return most_simulated
