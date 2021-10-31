@@ -136,7 +136,6 @@ class RuleBasedAgentPatrik(Agent):
         result = 0
         for card in cards:
             color = color_of_card[card]
-            # only for trumps 0-3 not with uneufe or obeabe!
             if trump == color:
                 result += self.trump_score[offset_of_card[card]]
             elif trump == OBE_ABE:
