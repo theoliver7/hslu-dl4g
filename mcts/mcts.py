@@ -40,7 +40,7 @@ class MonteCarloTreeSearch:
                 self.__back_propagation(node_to_simulate, score)
 
         node = self.__get_most_simulated_node(tree)
-        return card_ids.get(node.get_card())
+        return card_ids.get(node.get_card()), node.get_simulation_cnt()
 
     def _tree_policy(self, node: MCTSNode):
         """
