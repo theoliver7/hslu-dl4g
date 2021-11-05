@@ -6,7 +6,7 @@ from jass.game.game_util import deal_random_hand
 from jass.game.rule_schieber import RuleSchieber
 
 from players.cheating_mcts_agent import CheatingMCTSAgent
-
+from players.determinization_mcts_agent import DeterminizationMCTSAgent
 
 def main():
     nr_games_to_play = 3
@@ -17,11 +17,12 @@ def main():
         rule = RuleSchieber()
         game = GameSim(rule=rule)
         agent = CheatingMCTSAgent()
-        opponent = AgentRandomSchieber()
+        opponent = DeterminizationMCTSAgent()
         game.init_from_cards(hands=deal_random_hand(), dealer=NORTH)
 
         # Select random Trump
         game.action_trump(opponent.action_trump(game.get_observation()))
+
         while not game.is_done():
             if game.state.player % 2 == 0:
                 game.action_play_card(agent.action_play_card(game.state))
