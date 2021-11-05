@@ -73,9 +73,9 @@ class DeterminizationMCTSAgent(Agent):
         manager = multiprocessing.Manager()
         mcts_results = manager.dict()
         jobs = []
-        for i in range(5):
+        for i in range(100):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=( sampler, game_obs, mcts_results))
+                                        args=(sampler, game_obs, mcts_results))
             jobs.append(p)
             p.start()
 
