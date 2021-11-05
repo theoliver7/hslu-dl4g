@@ -62,7 +62,8 @@ class CheatingMCTSAgent(Agent):
         """
 
         # make a monte carlo tree search with perfect information to determine the best move
-        return MonteCarloTreeSearch().search(state, 0, 1)
+        to_play, sim_cnt = MonteCarloTreeSearch().search(state, 0, 1)
+        return to_play
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         # add your code here

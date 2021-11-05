@@ -23,7 +23,7 @@ def create_app():
         export FLASK_ENV=development
         flask run --host=0.0.0.0 --port=8888
     """
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.CRITICAL)
 
     # create and configure the app
     app = PlayerServiceApp('player_service')
