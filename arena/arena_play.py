@@ -18,7 +18,7 @@ def main():
     logging.basicConfig(level=logging.WARNING)
 
     # setup the arena
-    arena = Arena(nr_games_to_play=1, save_filename='arena_games')
+    arena = Arena(nr_games_to_play=10, save_filename='arena_games')
     team0 = AgentRandomSchieber()
     team1 = DeterminizationMCTSAgent()
 
