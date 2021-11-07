@@ -2,14 +2,46 @@ import time
 
 from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.game.const import card_ids
+from jass.game.game_observation import GameObservation
 from jass.game.game_sim import GameSim
 from jass.game.game_state import GameState
+from jass.game.game_state_util import observation_from_state
 from jass.game.rule_schieber import RuleSchieber
 
 from mcts.mcts_node import MCTSNode
+from mcts.hand_sampler import HandSampler
+
 
 
 class MonteCarloTreeSearch:
+
+    def information_set_search(self, game_state: GameState, iterations=100):
+        """
+            Determine the best card to play with imperfect information of game state
+        :param game_state: The game state with all info of the game
+        :param iterations: Iterations of ismcts which should be done
+        :return: Best card to play according to ismcts
+        """
+        sampler = HandSampler()
+        rootnode = MCTSNode(state=game_state)
+
+        for i in range(iterations):
+            # Selection & Expansion
+            node_to_simulate = self._tree_policy(rootnode)
+
+            # sampling
+            obs = observation_from_state(node_to_simulate.get_state())
+            hands = sampler.sample(game_obs=obs)
+            node_to_simulate.randomize_hands(hands)
+
+            # Simulation
+            score = self.__simulate_play(node_to_simulate, game_state.player)
+            # Backpropagation
+            self.__back_propagation(node_to_simulate, score)
+
+        node = self.__get_most_simulated_node(rootnode)
+        return card_ids.get(node.get_card())
+
     def search(self, game_state: GameState, iterations=300, seconds_limit=0.0):
         """
         Determine the card to play after analysis of all hands of the players

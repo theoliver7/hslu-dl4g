@@ -62,6 +62,9 @@ class MCTSNode:
         self.add_child(new_node)
         return new_node
 
+    def randomize_hands(self, hands: np.array):
+        self._state.hands = hands
+
     # GETTERS & SETTERS
     def get_parent(self):
         return self._parent
