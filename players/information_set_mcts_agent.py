@@ -1,11 +1,15 @@
+import numpy as np
 from jass.agents.agent import Agent
-from jass.game.const import PUSH, color_of_card, offset_of_card
+from jass.game.const import PUSH, color_of_card, offset_of_card, trump_ints, OBE_ABE, UNE_UFE
 from jass.game.game_observation import GameObservation
+from jass.game.game_sim import GameSim
 from jass.game.game_state import GameState
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
 from jass.game.rule_schieber import RuleSchieber
+from jass.game.game_state_util import observation_from_state, state_from_observation
 
 from mcts.mcts import MonteCarloTreeSearch
+from mcts.hand_sampler import HandSampler
 
 
 class InformationSetMCTSAgent(Agent):
@@ -46,7 +50,11 @@ class InformationSetMCTSAgent(Agent):
         return selected_color
 
     def action_play_card(self, obs: GameObservation) -> int:
-        return -1
+        game_sim = self.__create_game_sim_from_obs(obs)
+
+        to_play = MonteCarloTreeSearch().information_set_search(game_sim.state, iterations=100)
+
+        return to_play
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         result = 0
@@ -62,3 +70,23 @@ class InformationSetMCTSAgent(Agent):
                 result += self.no_trump_score[offset_of_card[card]]
 
         return result
+
+
+    def __create_game_sim_from_obs(self, game_obs: GameObservation) -> GameSim:
+        game_sim = GameSim(rule=RuleSchieber())
+        game_sim.init_from_state(state_from_observation(game_obs, HandSampler().sample(game_obs)))
+        """game_sim.init_from_cards(HandSampler().sample(game_obs), game_obs.dealer)
+        game_sim.state.player = game_obs.player
+        game_sim.state.trump = game_obs.trump
+        game_sim.state.forehand = game_obs.forehand
+        game_sim.state.declared_trump = game_obs.declared_trump
+        game_sim.state.tricks = game_obs.tricks
+        game_sim.state.trick_winner = game_obs.trick_winner
+        game_sim.state.trick_points = game_obs.trick_points
+        game_sim.state.trick_first_player = game_obs.trick_first_player
+        game_sim.state.current_trick = game_obs.current_trick
+        game_sim.state.nr_tricks = game_obs.nr_tricks
+        game_sim.state.nr_cards_in_trick = game_obs.nr_cards_in_trick
+        game_sim.state.nr_played_cards = game_obs.nr_played_cards
+        game_sim.state.points = game_obs.points"""
+        return game_sim
