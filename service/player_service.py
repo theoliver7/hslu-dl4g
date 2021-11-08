@@ -34,8 +34,7 @@ def create_app():
     # add some players
     app.add_player('random', AgentRandomSchieber())
     app.add_player('patrik_rule', RuleBasedAgentPatrik())
-    app.add_player('dmcts', DeterminizationMCTSAgent())
-
+    app.add_player('dmcts', DeterminizationMCTSAgent(threads=8,cutoff_time=5.0))
     return app
 
 

@@ -5,6 +5,7 @@ from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card
 from jass.game.game_observation import GameObservation
 from jass.game.game_sim import GameSim
+from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
 from jass.game.rule_schieber import RuleSchieber
 
@@ -27,10 +28,12 @@ class DeterminizationMCTSAgent(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self):
+    def __init__(self, threads=100, cutoff_time=1.0):
         super().__init__()
         # we need a rule object to determine the valid cards
         self._rule = RuleSchieber()
+        self._threads = threads
+        self._cutoff_time = cutoff_time
 
     def action_trump(self, obs: GameObservation) -> int:
         """
@@ -65,17 +68,21 @@ class DeterminizationMCTSAgent(Agent):
             the card to play, int encoded as defined in jass.game.const
         """
 
-        # make a monte carlo tree search with perfect information to determine the best move
-
         sampler = HandSampler()
+
+        # instantly return if only one card is valid to play
+        print(np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)))
+        if np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)) == 1:
+            print("instant return")
+            return int(np.argmax(self._rule.get_valid_cards_from_obs(game_obs)))
 
         # Investigate multiprocessing and thread safety of this return_dict
         manager = multiprocessing.Manager()
         mcts_results = manager.dict()
         jobs = []
-        for i in range(100):
+        for i in range(self._threads):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(sampler, game_obs, mcts_results))
+                                        args=(sampler, game_obs, mcts_results, self._cutoff_time))
             jobs.append(p)
             p.start()
 
@@ -87,10 +94,10 @@ class DeterminizationMCTSAgent(Agent):
         return max_card
 
     @staticmethod
-    def determinization_and_search(sampler, game_obs, mcts_results):
+    def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
         hands_sample = sampler.sample(game_obs)
         game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, 1)
+        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, cutoff_time)
 
         if to_play in mcts_results:
             mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
@@ -111,18 +118,5 @@ class DeterminizationMCTSAgent(Agent):
     @staticmethod
     def __create_game_sim_from_obs(game_obs: GameObservation, hands: np.array) -> GameSim:
         game_sim = GameSim(rule=RuleSchieber())
-        game_sim.init_from_cards(hands, game_obs.dealer)
-        game_sim.state.player = game_obs.player
-        game_sim.state.trump = game_obs.trump
-        game_sim.state.forehand = game_obs.forehand
-        game_sim.state.declared_trump = game_obs.declared_trump
-        game_sim.state.tricks = game_obs.tricks
-        game_sim.state.trick_winner = game_obs.trick_winner
-        game_sim.state.trick_points = game_obs.trick_points
-        game_sim.state.trick_first_player = game_obs.trick_first_player
-        game_sim.state.current_trick = game_obs.current_trick
-        game_sim.state.nr_tricks = game_obs.nr_tricks
-        game_sim.state.nr_cards_in_trick = game_obs.nr_cards_in_trick
-        game_sim.state.nr_played_cards = game_obs.nr_played_cards
-        game_sim.state.points = game_obs.points
+        game_sim.init_from_state(state_from_observation(game_obs, hands))
         return game_sim
