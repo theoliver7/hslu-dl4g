@@ -21,9 +21,10 @@ class InformationSetMCTSAgent(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self):
+    def __init__(self, iterations=100):
         super().__init__()
         self._rule = RuleSchieber()
+        self._iterations = iterations
 
     def action_trump(self, obs: GameObservation) -> int:
         """
@@ -52,7 +53,7 @@ class InformationSetMCTSAgent(Agent):
     def action_play_card(self, obs: GameObservation) -> int:
         game_sim = self.__create_game_sim_from_obs(obs)
 
-        to_play = MonteCarloTreeSearch().information_set_search(game_sim.state, iterations=100)
+        to_play = MonteCarloTreeSearch().information_set_search(game_sim.state, iterations=self._iterations)
 
         return to_play
 
@@ -71,22 +72,7 @@ class InformationSetMCTSAgent(Agent):
 
         return result
 
-
     def __create_game_sim_from_obs(self, game_obs: GameObservation) -> GameSim:
-        game_sim = GameSim(rule=RuleSchieber())
+        game_sim = GameSim(rule=self._rule)
         game_sim.init_from_state(state_from_observation(game_obs, HandSampler().sample(game_obs)))
-        """game_sim.init_from_cards(HandSampler().sample(game_obs), game_obs.dealer)
-        game_sim.state.player = game_obs.player
-        game_sim.state.trump = game_obs.trump
-        game_sim.state.forehand = game_obs.forehand
-        game_sim.state.declared_trump = game_obs.declared_trump
-        game_sim.state.tricks = game_obs.tricks
-        game_sim.state.trick_winner = game_obs.trick_winner
-        game_sim.state.trick_points = game_obs.trick_points
-        game_sim.state.trick_first_player = game_obs.trick_first_player
-        game_sim.state.current_trick = game_obs.current_trick
-        game_sim.state.nr_tricks = game_obs.nr_tricks
-        game_sim.state.nr_cards_in_trick = game_obs.nr_cards_in_trick
-        game_sim.state.nr_played_cards = game_obs.nr_played_cards
-        game_sim.state.points = game_obs.points"""
         return game_sim

@@ -19,10 +19,9 @@ def main():
     logging.basicConfig(level=logging.WARNING)
 
     # setup the arena
-    arena = Arena(nr_games_to_play=10, save_filename='arena_games')
-    team0 = AgentRandomSchieber()
-    team1 = DeterminizationMCTSAgent()
-
+    arena = Arena(nr_games_to_play=10)
+    team0 = InformationSetMCTSAgent(iterations=1000)
+    team1 = DeterminizationMCTSAgent(threads=12, cutoff_time=1.0)
 
     arena.set_players(team0, team1, team0, team1)
     print('Playing {} games'.format(arena.nr_games_to_play))
