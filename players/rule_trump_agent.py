@@ -6,7 +6,7 @@ from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_lis
     convert_one_hot_encoded_cards_to_str_encoded_list
 from jass.game.rule_schieber import RuleSchieber
 
-class RuleBasedAgent(Agent):
+class RuleBasedTrumpSelectionAgent(Agent):
     trump_score = [15, 10, 7, 25, 6, 19, 5, 5, 5]
     # score if the color is not trump
     no_trump_score = [9, 7, 5, 2, 1, 0, 0, 0, 0]

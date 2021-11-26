@@ -11,6 +11,7 @@ from jass.service.player_service_app import PlayerServiceApp
 from jass.agents.agent_random_schieber import AgentRandomSchieber
 
 from players.determinization_mcts_agent import DeterminizationMCTSAgent
+from players.information_set_mcts_agent import InformationSetMCTSAgent
 from players.rule_based_agent import RuleBasedAgentPatrik
 
 
@@ -34,7 +35,16 @@ def create_app():
     # add some players
     app.add_player('random', AgentRandomSchieber())
     app.add_player('patrik_rule', RuleBasedAgentPatrik())
-    app.add_player('dmcts', DeterminizationMCTSAgent(threads=8,cutoff_time=5.0))
+
+    app.add_player('dmcts0', DeterminizationMCTSAgent(threads=12, cutoff_time=9.5))
+    app.add_player('dmcts1', DeterminizationMCTSAgent(threads=8, cutoff_time=5.0))
+    app.add_player('dmcts2', DeterminizationMCTSAgent(threads=100, cutoff_time=5.0))
+    app.add_player('dmcts3', DeterminizationMCTSAgent(threads=200, cutoff_time=5.0))
+
+    app.add_player('imcts0', InformationSetMCTSAgent(iterations=1000))
+    app.add_player('imcts1', InformationSetMCTSAgent(iterations=2000))
+    app.add_player('imcts2', InformationSetMCTSAgent(iterations=3000))
+    app.add_player('imcts3', InformationSetMCTSAgent(iterations=4000))
     return app
 
 

@@ -4,24 +4,22 @@
 #
 
 import logging
-
-from jass.agents.agent_random_schieber import AgentRandomSchieber
+import numpy as np
 from jass.arena.arena import Arena
 
-from players.determinization_mcts_agent import DeterminizationMCTSAgent
-from players.information_set_mcts_agent import InformationSetMCTSAgent
-from players.minmax_agent import MinMaxAgent
-from players.rule_based_agent import RuleBasedAgent, RuleBasedAgentPatrik
+from players.dnn_trump_agent import DNNBasedTrumpSelectionAgent
+from players.rule_trump_agent import RuleBasedTrumpSelectionAgent
 
 
 def main():
     # Set the global logging level (Set to debug or info to see more messages)
     logging.basicConfig(level=logging.WARNING)
-
+    #Set seed for np random that plays are always the same -> better to compare trump selections
+    np.random.seed(77)
     # setup the arena
-    arena = Arena(nr_games_to_play=10)
-    team0 = DeterminizationMCTSAgent(threads=4, cutoff_time=1.0)
-    team1 = InformationSetMCTSAgent(iterations=200)
+    arena = Arena(nr_games_to_play=1000)
+    team0 = DNNBasedTrumpSelectionAgent()
+    team1 = RuleBasedTrumpSelectionAgent()
 
     arena.set_players(team0, team1, team0, team1)
     print('Playing {} games'.format(arena.nr_games_to_play))
