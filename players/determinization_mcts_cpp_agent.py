@@ -1,13 +1,11 @@
 import multiprocessing
 
+import jasscpp
 import numpy as np
 from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card, UNE_UFE, OBE_ABE, trump_ints
-from jass.game.game_observation import GameObservation
-from jass.game.game_sim import GameSim
 from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
-from jass.game.rule_schieber import RuleSchieber
 
 from mcts.hand_sampler import HandSampler
 from mcts.mcts import MonteCarloTreeSearch
@@ -19,7 +17,7 @@ from mcts.mcts import MonteCarloTreeSearch
 # Play card:        Plays highest value card
 
 
-class DeterminizationMCTSAgent(Agent):
+class DeterminizationMCTSAgentCpp(Agent):
     trump_score = [15, 10, 7, 25, 6, 19, 5, 5, 5]
     # score if the color is not trump
     no_trump_score = [9, 7, 5, 2, 1, 0, 0, 0, 0]
@@ -31,11 +29,11 @@ class DeterminizationMCTSAgent(Agent):
     def __init__(self, threads=100, cutoff_time=1.0):
         super().__init__()
         # we need a rule object to determine the valid cards
-        self._rule = RuleSchieber()
+        self._rule = jasscpp.RuleSchieberCpp()
         self._threads = threads
         self._cutoff_time = cutoff_time
 
-    def action_trump(self, obs: GameObservation) -> int:
+    def action_trump(self, obs: jasscpp.GameObservationCpp) -> int:
         """
             Determine trump action for the given observation
             Args:
@@ -59,7 +57,7 @@ class DeterminizationMCTSAgent(Agent):
 
         return selected_color
 
-    def action_play_card(self, game_obs: GameObservation) -> int:
+    def action_play_card(self, game_obs: jasscpp.GameObservationCpp) -> int:
         """
         Determine the card to play for this trick with the minmax algorithm
 
@@ -98,7 +96,7 @@ class DeterminizationMCTSAgent(Agent):
     @staticmethod
     def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
         hands_sample = sampler.sample(game_obs)
-        game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
+        game_sim = DeterminizationMCTSAgentCpp.__create_game_sim_from_obs(game_obs, hands_sample)
         to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, cutoff_time)
 
         if to_play in mcts_results:
@@ -122,7 +120,7 @@ class DeterminizationMCTSAgent(Agent):
         return result
 
     @staticmethod
-    def __create_game_sim_from_obs(game_obs: GameObservation, hands: np.array) -> GameSim:
-        game_sim = GameSim(rule=RuleSchieber())
-        game_sim.init_from_state(state_from_observation(game_obs, hands))
+    def __create_game_sim_from_obs(game_obs: jasscpp.GameObservationCpp, hands: np.array) -> jasscpp.GameSimCpp:
+        state = jasscpp.state_from_observation(game_obs, hands)
+        game_sim = jasscpp.GameSimCpp(state,jasscpp.RuleSchieberCpp())
         return game_sim

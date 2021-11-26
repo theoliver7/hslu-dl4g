@@ -5,8 +5,9 @@ from jass.game.game_observation import GameObservation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list, \
     convert_one_hot_encoded_cards_to_str_encoded_list
 from jass.game.rule_schieber import RuleSchieber
+from tensorflow import keras
 
-class RuleBasedAgent(Agent):
+class DNNBasedTrumpSelectionAgent(Agent):
     trump_score = [15, 10, 7, 25, 6, 19, 5, 5, 5]
     # score if the color is not trump
     no_trump_score = [9, 7, 5, 2, 1, 0, 0, 0, 0]
@@ -20,6 +21,9 @@ class RuleBasedAgent(Agent):
         # we need a rule object to determine the valid cards
         self._rule = RuleSchieber()
 
+        self._model = keras.models.load_model('../notebooks/models/v1')
+
+
     def action_trump(self, obs: GameObservation) -> int:
         """
         Determine trump action for the given observation
@@ -30,17 +34,18 @@ class RuleBasedAgent(Agent):
             selected trump as encoded in jass.game.const or jass.game.const.PUSH
         """
         # add your code here using the function above
-        push_threshold = 68
-        hand_cards = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
-        color_trump_values = [0, 0, 0, 0]
-        for color in range(4):
-            color_trump_values[color] = self.__calculate_trump_selection_score(hand_cards, color)
-        max_value = max(color_trump_values)
-        best_color = color_trump_values.index(max_value)
-        if max_value < push_threshold and obs.player < 1:
-            return PUSH
-        else:
-            return best_color
+        input = np.append(obs.hand,obs.forehand)
+        input = input[:,np.newaxis]
+
+        output = self._model.predict(input.T)
+        trump = np.argmax(output)
+        if trump ==6:
+            if obs.forehand:
+                trump = 10
+            else:
+                trump = np.argsort(np.max(output, axis=0))[-2]
+        return trump
+
 
     def action_play_card(self, obs: GameObservation) -> int:
         """
@@ -53,15 +58,5 @@ class RuleBasedAgent(Agent):
             the card to play, int encoded as defined in jass.game.const
         """
         valid_actions = np.flatnonzero(self._rule.get_valid_cards_from_obs(obs))
-        return np.random.choice(valid_actions)
-
-    def __calculate_trump_selection_score(self, cards, trump: int) -> int:
-        # add your code here
-        trump_selection_score = 0
-        for card in cards:
-            if color_of_card[card] == trump:
-                trump_selection_score += self.trump_score[offset_of_card[card]]
-            else:
-                trump_selection_score += self.no_trump_score[offset_of_card[card]]
-
-        return trump_selection_score
+        action = np.random.choice(valid_actions)
+        return action
