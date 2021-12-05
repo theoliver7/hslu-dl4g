@@ -1,10 +1,18 @@
+import multiprocessing
+
 import numpy as np
 from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card
 from jass.game.game_observation import GameObservation
+from jass.game.game_sim import GameSim
+from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list, \
     convert_one_hot_encoded_cards_to_str_encoded_list
 from jass.game.rule_schieber import RuleSchieber
+
+from mcts.hand_sampler import HandSampler
+from mcts.mcts import MonteCarloTreeSearch
+
 
 class RuleBasedTrumpSelectionAgent(Agent):
     trump_score = [15, 10, 7, 25, 6, 19, 5, 5, 5]
@@ -42,18 +50,60 @@ class RuleBasedTrumpSelectionAgent(Agent):
         else:
             return best_color
 
-    def action_play_card(self, obs: GameObservation) -> int:
+    def action_play_card(self, game_obs: GameObservation) -> int:
         """
-        Determine the card to play.
+        Determine the card to play for this trick with the minmax algorithm
 
         Args:
-            obs: the game observation
+            state: the game state where all hands of all players can be seen
 
         Returns:
             the card to play, int encoded as defined in jass.game.const
         """
-        valid_actions = np.flatnonzero(self._rule.get_valid_cards_from_obs(obs))
-        return np.random.choice(valid_actions)
+        # valid_actions = np.flatnonzero(self._rule.get_valid_cards_from_obs(game_obs))
+        # return np.random.choice(valid_actions)
+        sampler = HandSampler()
+
+        # instantly return if only one card is valid to play
+        print(np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)))
+        if np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)) == 1:
+            print("instant return")
+            return int(np.argmax(self._rule.get_valid_cards_from_obs(game_obs)))
+        threads = 4
+        cutoff_time = 0.2
+        # Investigate multiprocessing and thread safety of this return_dict
+        manager = multiprocessing.Manager()
+        mcts_results = manager.dict()
+        jobs = []
+        for i in range(threads):
+            p = multiprocessing.Process(target=self.determinization_and_search,
+                                        args=(sampler, game_obs, mcts_results, cutoff_time))
+            jobs.append(p)
+            p.start()
+
+        for proc in jobs:
+            proc.join()
+        print(mcts_results)
+
+        max_card = max(mcts_results, key=mcts_results.get)
+        return max_card
+
+    @staticmethod
+    def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
+        hands_sample = sampler.sample(game_obs)
+        game_sim = RuleBasedTrumpSelectionAgent.__create_game_sim_from_obs(game_obs, hands_sample)
+        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, cutoff_time)
+
+        if to_play in mcts_results:
+            mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
+        else:
+            mcts_results[to_play] = simulation_cnt
+
+    @staticmethod
+    def __create_game_sim_from_obs(game_obs: GameObservation, hands: np.array) -> GameSim:
+        game_sim = GameSim(rule=RuleSchieber())
+        game_sim.init_from_state(state_from_observation(game_obs, hands))
+        return game_sim
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         # add your code here
