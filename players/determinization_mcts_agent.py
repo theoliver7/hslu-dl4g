@@ -1,6 +1,9 @@
 import multiprocessing
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="-1" # don't know whats happening
 
 import numpy as np
+import jasscpp
 from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card, UNE_UFE, OBE_ABE, trump_ints
 from jass.game.game_observation import GameObservation
@@ -8,7 +11,8 @@ from jass.game.game_sim import GameSim
 from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
 from jass.game.rule_schieber import RuleSchieber
-
+# from tensorflow import keras
+# import tensorflow as tf
 from mcts.hand_sampler import HandSampler
 from mcts.mcts import MonteCarloTreeSearch
 
@@ -28,12 +32,18 @@ class DeterminizationMCTSAgent(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self, threads=100, cutoff_time=1.0):
+    def __init__(self, threads=100, cutoff_time=1.0,model_location = ""):
         super().__init__()
         # we need a rule object to determine the valid cards
         self._rule = RuleSchieber()
         self._threads = threads
         self._cutoff_time = cutoff_time
+
+        # if os.path.exists(model_location):
+        #     self._model = keras.models.load_model(model_location)
+        # else:
+        #     print("invalid file location")
+
 
     def action_trump(self, obs: GameObservation) -> int:
         """
@@ -44,6 +54,18 @@ class DeterminizationMCTSAgent(Agent):
             Returns:
                 selected trump as encoded in jass.game.const or jass.game.const.PUSH
         """
+        # input = np.append(obs.hand, obs.forehand)
+        # input = input[:, np.newaxis]
+        # output = None
+        # with tf.device('/cpu:0'):
+        #     output = self._model.predict(input.T)
+        # trump = np.argmax(output)
+        # if trump == 6:
+        #     if obs.forehand:
+        #         trump = 10
+        #     else:
+        #         trump = np.argsort(np.max(output, axis=0))[2]
+        # return trump
         my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
         trump_score = 0
         selected_color = -1
@@ -70,13 +92,28 @@ class DeterminizationMCTSAgent(Agent):
             the card to play, int encoded as defined in jass.game.const
         """
 
-        sampler = HandSampler()
-
         # instantly return if only one card is valid to play
-        print(np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)))
-        if np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)) == 1:
+
+        cpp_obs = jasscpp.GameObservationCpp(game_obs.dealer,
+                                             game_obs.player,
+                                             game_obs.player_view,
+                                             game_obs.declared_trump,
+                                             game_obs.forehand,
+                                             game_obs.hand,
+                                             game_obs.tricks,
+                                             game_obs.trick_winner,
+                                             game_obs.trick_first_player,
+                                             game_obs.trick_points,
+                                             game_obs.nr_cards_in_trick,
+                                             game_obs.nr_played_cards,
+                                             game_obs.nr_played_cards,
+                                             list(game_obs.points))
+
+        valid_cards = jasscpp.RuleSchieberCpp().get_valid_cards(game_obs.hand,game_obs.current_trick,game_obs.nr_cards_in_trick, game_obs.trump)
+        print(valid_cards)
+        if np.count_nonzero(valid_cards) == 1:
             print("instant return")
-            return int(np.argmax(self._rule.get_valid_cards_from_obs(game_obs)))
+            return int(np.argmax(valid_cards))
 
         # Investigate multiprocessing and thread safety of this return_dict
         manager = multiprocessing.Manager()
@@ -84,7 +121,7 @@ class DeterminizationMCTSAgent(Agent):
         jobs = []
         for i in range(self._threads):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(sampler, game_obs, mcts_results, self._cutoff_time))
+                                        args=(game_obs, mcts_results, self._cutoff_time))
             jobs.append(p)
             p.start()
 
@@ -96,8 +133,8 @@ class DeterminizationMCTSAgent(Agent):
         return max_card
 
     @staticmethod
-    def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
-        hands_sample = sampler.sample(game_obs)
+    def determinization_and_search(game_obs, mcts_results, cutoff_time):
+        hands_sample = HandSampler.sample(game_obs)
         game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
         to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, cutoff_time)
 

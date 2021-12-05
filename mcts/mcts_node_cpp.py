@@ -6,7 +6,7 @@ import numpy as np
 from jass.game.const import card_ids
 from jass.game.game_util import convert_one_hot_encoded_cards_to_str_encoded_list
 from jass.game.rule_schieber import RuleSchieber
-from jasscpp import GameStateCpp, GameSimCpp
+from jasscpp import GameStateCpp, GameSimCpp, RuleSchieberCpp
 
 
 class MCTSNodeCpp:
@@ -26,7 +26,7 @@ class MCTSNodeCpp:
         self._simulation_cnt = 0
         player_hand = []
         if self._state is not None:
-            player_hand = RuleSchieber().get_valid_cards(self._state.hands[self._state.player],
+            player_hand = RuleSchieberCpp().get_valid_cards(self._state.hands[self._state.player],
                                                          self._state.current_trick,
                                                          self._state.nr_cards_in_trick,
                                                          self._state.trump)

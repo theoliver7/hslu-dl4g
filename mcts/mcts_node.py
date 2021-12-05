@@ -2,6 +2,7 @@ from __future__ import annotations  # import to allow self referencing type
 
 import copy
 
+import jasscpp
 import numpy as np
 from jass.game.const import card_ids
 from jass.game.game_sim import GameSim
@@ -27,10 +28,14 @@ class MCTSNode:
         self._simulation_cnt = 0
         player_hand = []
         if self._state is not None:
-            player_hand = RuleSchieber().get_valid_cards(self._state.hands[self._state.player],
-                                                         self._state.current_trick,
-                                                         self._state.nr_cards_in_trick,
-                                                         self._state.trump)
+            if (self._state.current_trick is None):
+                print("-------------------------------")
+                self._state.current_trick = np.zeros((4,1))
+
+            player_hand = jasscpp.RuleSchieberCpp().get_valid_cards(self._state.hands[self._state.player],
+                                                                    self._state.current_trick,
+                                                                    self._state.nr_cards_in_trick,
+                                                                    self._state.trump)
         self._available_cards = convert_one_hot_encoded_cards_to_str_encoded_list(player_hand)
         self._available_cards_cnt = len(self._available_cards)
 

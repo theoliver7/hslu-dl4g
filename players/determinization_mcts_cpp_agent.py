@@ -4,6 +4,7 @@ import jasscpp
 import numpy as np
 from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card, UNE_UFE, OBE_ABE, trump_ints
+from jass.game.game_observation import GameObservation
 from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
 
@@ -33,7 +34,7 @@ class DeterminizationMCTSAgentCpp(Agent):
         self._threads = threads
         self._cutoff_time = cutoff_time
 
-    def action_trump(self, obs: jasscpp.GameObservationCpp) -> int:
+    def action_trump(self, obs: GameObservation) -> int:
         """
             Determine trump action for the given observation
             Args:
@@ -42,6 +43,7 @@ class DeterminizationMCTSAgentCpp(Agent):
             Returns:
                 selected trump as encoded in jass.game.const or jass.game.const.PUSH
         """
+        obs = GameObservationCpp()
         my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
         trump_score = 0
         selected_color = -1
@@ -116,7 +118,6 @@ class DeterminizationMCTSAgentCpp(Agent):
                 result += self.uneufe_score[offset_of_card[card]]
             else:
                 result += self.no_trump_score[offset_of_card[card]]
-
         return result
 
     @staticmethod
