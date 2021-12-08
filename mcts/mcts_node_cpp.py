@@ -2,6 +2,7 @@ from __future__ import annotations  # import to allow self referencing type
 
 import copy
 
+import jasscpp
 import numpy as np
 from jass.game.const import card_ids
 from jass.game.game_util import convert_one_hot_encoded_cards_to_str_encoded_list
@@ -26,10 +27,12 @@ class MCTSNodeCpp:
         self._simulation_cnt = 0
         player_hand = []
         if self._state is not None:
-            player_hand = RuleSchieberCpp().get_valid_cards(self._state.hands[self._state.player],
-                                                         self._state.current_trick,
-                                                         self._state.nr_cards_in_trick,
-                                                         self._state.trump)
+            if not self._state.current_trick>8:
+                player_hand = jasscpp.RuleSchieberCpp().get_valid_cards(self._state.hands[self._state.player],
+                                                                    self._state.tricks[self._state.current_trick],
+                                                                    self._state.nr_cards_in_trick,
+                                                                    self._state.trump)
+
         self._available_cards = convert_one_hot_encoded_cards_to_str_encoded_list(player_hand)
         self._available_cards_cnt = len(self._available_cards)
 
@@ -48,13 +51,17 @@ class MCTSNodeCpp:
         return self._children[np.argmax(choices_weights)]
 
     def expand(self):
-        node_sim = GameSimCpp(self.get_state())
+        node_sim = GameSimCpp()
+        node_sim.state = self.get_state()
 
         card = np.random.choice(self.get_available_cards())
         self.remove_available_card(card)
 
-        sim_copy = copy.deepcopy(node_sim)
-        sim_copy.action_play_card(card_ids.get(card))
+
+        # deepcopy doesn't work copy.deepcopy(node_sim) alternative:
+        sim_copy = GameSimCpp()
+        sim_copy.state = node_sim.state
+        sim_copy.perform_action_play_card(card_ids.get(card))
         new_node = MCTSNodeCpp(self, sim_copy.state, card)
         new_node.set_parent(self)
         self.add_child(new_node)

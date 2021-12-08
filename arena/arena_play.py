@@ -9,9 +9,8 @@ from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.arena.arena import Arena
 
 from players.determinization_mcts_agent import DeterminizationMCTSAgent
+from players.determinization_mcts_cpp_agent import DeterminizationCppMCTSAgent
 from players.information_set_mcts_agent import InformationSetMCTSAgent
-from players.minmax_agent import MinMaxAgent
-from players.rule_based_agent import RuleBasedAgent, RuleBasedAgentPatrik
 
 
 def main():
@@ -19,9 +18,12 @@ def main():
     logging.basicConfig(level=logging.WARNING)
 
     # setup the arena
-    arena = Arena(nr_games_to_play=10)
-    team0 = DeterminizationMCTSAgent(threads=4, cutoff_time=1.0)
-    team1 = InformationSetMCTSAgent(iterations=200)
+    arena = Arena(nr_games_to_play=20)
+
+    # team0 = InformationSetMCTSAgent(700)
+    team0 = DeterminizationCppMCTSAgent(threads=1, cutoff_time=0.0)
+    team1 = DeterminizationCppMCTSAgent(threads=1, cutoff_time=0.0, model_location='../notebooks/models/v7')
+    # team1 = AgentRandomSchieber()
 
     arena.set_players(team0, team1, team0, team1)
     print('Playing {} games'.format(arena.nr_games_to_play))

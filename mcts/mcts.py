@@ -12,7 +12,6 @@ from mcts.mcts_node import MCTSNode
 from mcts.hand_sampler import HandSampler
 
 
-
 class MonteCarloTreeSearch:
 
     def information_set_search(self, game_state: GameState, iterations=100):

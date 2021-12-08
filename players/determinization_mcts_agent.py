@@ -3,7 +3,6 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1" # don't know whats happening
 
 import numpy as np
-import jasscpp
 from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card, UNE_UFE, OBE_ABE, trump_ints
 from jass.game.game_observation import GameObservation
@@ -94,23 +93,7 @@ class DeterminizationMCTSAgent(Agent):
 
         # instantly return if only one card is valid to play
 
-        cpp_obs = jasscpp.GameObservationCpp(game_obs.dealer,
-                                             game_obs.player,
-                                             game_obs.player_view,
-                                             game_obs.declared_trump,
-                                             game_obs.forehand,
-                                             game_obs.hand,
-                                             game_obs.tricks,
-                                             game_obs.trick_winner,
-                                             game_obs.trick_first_player,
-                                             game_obs.trick_points,
-                                             game_obs.nr_cards_in_trick,
-                                             game_obs.nr_played_cards,
-                                             game_obs.nr_played_cards,
-                                             list(game_obs.points))
-
-        valid_cards = jasscpp.RuleSchieberCpp().get_valid_cards(game_obs.hand,game_obs.current_trick,game_obs.nr_cards_in_trick, game_obs.trump)
-        print(valid_cards)
+        valid_cards = self._rule.get_valid_cards_from_obs(game_obs)
         if np.count_nonzero(valid_cards) == 1:
             print("instant return")
             return int(np.argmax(valid_cards))
@@ -119,9 +102,10 @@ class DeterminizationMCTSAgent(Agent):
         manager = multiprocessing.Manager()
         mcts_results = manager.dict()
         jobs = []
+        sampler = HandSampler()
         for i in range(self._threads):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(game_obs, mcts_results, self._cutoff_time))
+                                        args=(sampler,game_obs, mcts_results, self._cutoff_time))
             jobs.append(p)
             p.start()
 
@@ -133,10 +117,10 @@ class DeterminizationMCTSAgent(Agent):
         return max_card
 
     @staticmethod
-    def determinization_and_search(game_obs, mcts_results, cutoff_time):
-        hands_sample = HandSampler.sample(game_obs)
+    def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
+        hands_sample = sampler.sample(game_obs)
         game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, cutoff_time)
+        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state,seconds_limit= cutoff_time)
 
         if to_play in mcts_results:
             mcts_results[to_play] = simulation_cnt + mcts_results[to_play]

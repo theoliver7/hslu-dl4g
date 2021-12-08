@@ -1,13 +1,21 @@
 import multiprocessing
+import os
 
-import jasscpp
+from mcts.mcts_cpp import MonteCarloTreeSearchCpp
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # don't know whats happening
+
 import numpy as np
+import jasscpp
 from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card, UNE_UFE, OBE_ABE, trump_ints
 from jass.game.game_observation import GameObservation
+from jass.game.game_sim import GameSim
 from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
-
+from jass.game.rule_schieber import RuleSchieber
+from tensorflow import keras
+import tensorflow as tf
 from mcts.hand_sampler import HandSampler
 from mcts.mcts import MonteCarloTreeSearch
 
@@ -18,7 +26,7 @@ from mcts.mcts import MonteCarloTreeSearch
 # Play card:        Plays highest value card
 
 
-class DeterminizationMCTSAgentCpp(Agent):
+class DeterminizationCppMCTSAgent(Agent):
     trump_score = [15, 10, 7, 25, 6, 19, 5, 5, 5]
     # score if the color is not trump
     no_trump_score = [9, 7, 5, 2, 1, 0, 0, 0, 0]
@@ -27,12 +35,18 @@ class DeterminizationMCTSAgentCpp(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self, threads=100, cutoff_time=1.0):
+    def __init__(self, threads=100, cutoff_time=1.0, model_location=""):
         super().__init__()
         # we need a rule object to determine the valid cards
         self._rule = jasscpp.RuleSchieberCpp()
         self._threads = threads
         self._cutoff_time = cutoff_time
+
+        if os.path.exists(model_location):
+            self._model = keras.models.load_model(model_location)
+        else:
+            self._model = None
+            print("invalid file location")
 
     def action_trump(self, obs: GameObservation) -> int:
         """
@@ -43,23 +57,36 @@ class DeterminizationMCTSAgentCpp(Agent):
             Returns:
                 selected trump as encoded in jass.game.const or jass.game.const.PUSH
         """
-        obs = GameObservationCpp()
-        my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
-        trump_score = 0
-        selected_color = -1
-        for color in trump_ints:
-            trump_tmp = self.__calculate_trump_selection_score(my_hand, color)
-            if trump_tmp > trump_score:
-                trump_score = trump_tmp
-                selected_color = color
+        if self._model is not None:
+            input = np.append(obs.hand, obs.forehand)
+            input = input[:, np.newaxis]
+            output = None
+            with tf.device('/cpu:0'):
+                output = self._model.predict(input.T)
+            trump = np.argmax(output)
+            if trump == 6:
+                if obs.forehand:
+                    trump = 10
+                else:
+                    trump = np.argsort(np.max(output, axis=0))[2]
+            return trump
+        else:
+            my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
+            trump_score = 0
+            selected_color = -1
+            for color in trump_ints:
+                trump_tmp = self.__calculate_trump_selection_score(my_hand, color)
+                if trump_tmp > trump_score:
+                    trump_score = trump_tmp
+                    selected_color = color
 
-        if trump_score <= 68:
-            if obs.forehand == -1:
-                return PUSH
+            if trump_score <= 68:
+                if obs.forehand == -1:
+                    return PUSH
 
-        return selected_color
+            return selected_color
 
-    def action_play_card(self, game_obs: jasscpp.GameObservationCpp) -> int:
+    def action_play_card(self, game_obs: GameObservation) -> int:
         """
         Determine the card to play for this trick with the minmax algorithm
 
@@ -70,21 +97,37 @@ class DeterminizationMCTSAgentCpp(Agent):
             the card to play, int encoded as defined in jass.game.const
         """
 
-        sampler = HandSampler()
-
         # instantly return if only one card is valid to play
-        print(np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)))
-        if np.count_nonzero(self._rule.get_valid_cards_from_obs(game_obs)) == 1:
-            print("instant return")
-            return int(np.argmax(self._rule.get_valid_cards_from_obs(game_obs)))
+        cpp_obs = jasscpp.GameObservationCpp()
+        cpp_obs.dealer = game_obs.dealer
+        cpp_obs.player = game_obs.player
+        cpp_obs.trump = game_obs.trump
+        cpp_obs.declared_trump_player = game_obs.declared_trump
+        cpp_obs.forehand = game_obs.forehand
+        cpp_obs.hand = game_obs.hand
+        cpp_obs.tricks = game_obs.tricks
+        cpp_obs.trick_winner = game_obs.trick_winner
+        cpp_obs.trick_first_player = game_obs.trick_first_player
+        cpp_obs.trick_points = game_obs.trick_points
+        cpp_obs.nr_cards_in_trick = game_obs.nr_cards_in_trick
+        cpp_obs.nr_played_cards = game_obs.nr_played_cards
+        cpp_obs.points = game_obs.points
 
+        # TODO weird not sure if works like that
+        cpp_obs.current_trick = game_obs.nr_tricks
+
+        valid_cards = self._rule.get_valid_cards_from_obs(cpp_obs)
+        if np.count_nonzero(valid_cards) == 1:
+            print("instant return")
+            return int(np.argmax(valid_cards))
+        sampler = HandSampler()
         # Investigate multiprocessing and thread safety of this return_dict
         manager = multiprocessing.Manager()
         mcts_results = manager.dict()
         jobs = []
         for i in range(self._threads):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(sampler, game_obs, mcts_results, self._cutoff_time))
+                                        args=(sampler, cpp_obs, mcts_results, self._cutoff_time))
             jobs.append(p)
             p.start()
 
@@ -95,11 +138,10 @@ class DeterminizationMCTSAgentCpp(Agent):
         max_card = max(mcts_results, key=mcts_results.get)
         return max_card
 
-    @staticmethod
-    def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
+    def determinization_and_search(self, sampler, game_obs: jasscpp.GameObservationCpp, mcts_results, cutoff_time):
         hands_sample = sampler.sample(game_obs)
-        game_sim = DeterminizationMCTSAgentCpp.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_sim.state, 0, cutoff_time)
+        game_sim = DeterminizationCppMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
+        to_play, simulation_cnt = MonteCarloTreeSearchCpp().search(game_state=game_sim.state,seconds_limit=cutoff_time)
 
         if to_play in mcts_results:
             mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
@@ -118,10 +160,12 @@ class DeterminizationMCTSAgentCpp(Agent):
                 result += self.uneufe_score[offset_of_card[card]]
             else:
                 result += self.no_trump_score[offset_of_card[card]]
+
         return result
 
     @staticmethod
-    def __create_game_sim_from_obs(game_obs: jasscpp.GameObservationCpp, hands: np.array) -> jasscpp.GameSimCpp:
+    def __create_game_sim_from_obs(game_obs: GameObservation, hands: np.array) -> GameSim:
+        game_sim = jasscpp.GameSimCpp()
         state = jasscpp.state_from_observation(game_obs, hands)
-        game_sim = jasscpp.GameSimCpp(state,jasscpp.RuleSchieberCpp())
+        game_sim.state = state
         return game_sim
