@@ -1,12 +1,15 @@
+import random
 import time
 
 import jasscpp
+import numpy as np
 from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.game.const import card_ids
 from jass.game.game_state_util import observation_from_state
 
 from mcts.hand_sampler import HandSampler
 from mcts.mcts_node import MCTSNode
+from mcts.mcts_node_cpp import MCTSNodeCpp
 
 
 class MonteCarloTreeSearchCpp:
@@ -19,7 +22,7 @@ class MonteCarloTreeSearchCpp:
         :return: Best card to play according to ismcts
         """
         sampler = HandSampler()
-        rootnode = MCTSNode(state=game_state)
+        rootnode = MCTSNodeCpp(state=game_state)
 
         for i in range(iterations):
             # Selection & Expansion
@@ -48,7 +51,7 @@ class MonteCarloTreeSearchCpp:
         Returns:
             Best card to play according to mcts
         """
-        tree = MCTSNode(state=game_state)
+        tree = MCTSNodeCpp(state=game_state)
 
         if seconds_limit == 0.0:
             for i in range(iterations):
@@ -70,7 +73,7 @@ class MonteCarloTreeSearchCpp:
         node = self.__get_most_simulated_node(tree)
         return card_ids.get(node.get_card()), node.get_simulation_cnt()
 
-    def _tree_policy(self, node: MCTSNode):
+    def _tree_policy(self, node: MCTSNodeCpp):
         """
         :param node: root node from which to find best next best one
         :return: most promising node to explore
@@ -84,20 +87,22 @@ class MonteCarloTreeSearchCpp:
                 current_node = current_node.best_child_ubc()
         return current_node
 
-    def __simulate_play(self, node: MCTSNode, simulating_player: int):
+    def __simulate_play(self, node: MCTSNodeCpp, simulating_player: int):
         """
         :param node: selected node which simulated
         :param simulating_player: player which started mcts simulation
         :return: outcome of play
         -------
         """
-        game_sim = jasscpp.GameSimCpp(node.get_state())
+        game_sim = jasscpp.GameSimCpp()
+        game_sim.state = node.get_state()
 
-
-        random_player = AgentRandomSchieber()
 
         while not game_sim.is_done():
-            game_sim.action_play_card(random_player.action_play_card(game_sim.get_observation()))
+            valid_actions = np.flatnonzero(game_sim.get_valid_cards())
+            action = np.random.choice(valid_actions)
+            game_sim.perform_action_play_card(action)
+
 
         if simulating_player % 2 == 0:
             # normalize points
@@ -118,9 +123,9 @@ class MonteCarloTreeSearchCpp:
             tmp_node.set_win_score(score)
             tmp_node = tmp_node.get_parent()
 
-    def __get_most_simulated_node(self, tree: MCTSNode):
-        most_simulated = MCTSNode()
-        child: MCTSNode
+    def __get_most_simulated_node(self, tree: MCTSNodeCpp):
+        most_simulated = MCTSNodeCpp()
+        child: MCTSNodeCpp
         for child in tree.get_children():
             if child.get_simulation_cnt() > most_simulated.get_simulation_cnt():
                 most_simulated = child
