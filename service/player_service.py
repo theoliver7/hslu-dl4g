@@ -40,8 +40,10 @@ def create_app():
     app.add_player('dmcts0', DeterminizationMCTSAgent(threads=100, cutoff_time=1.0))
     app.add_player('dmcts1', DeterminizationMCTSAgent(threads=100, cutoff_time=1.0))
 
-    app.add_player('dmcts2', DeterminizationCppMCTSAgent(threads=100, cutoff_time=1.0))
-    app.add_player('dmcts3', DeterminizationMCTSAgent(threads=200, cutoff_time=5.0))
+    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=100, iterations=300))
+    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=200, iterations=300))
+    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=300, iterations=300))
+    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=400, iterations=300))
 
     app.add_player('imcts0', InformationSetMCTSAgent(iterations=1000))
     app.add_player('imcts1', InformationSetMCTSAgent(iterations=2000))
