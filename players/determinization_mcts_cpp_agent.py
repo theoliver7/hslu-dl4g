@@ -1,6 +1,7 @@
 import multiprocessing
 import os
 
+from mcts.hand_sampler_new import HandSampler2
 from mcts.mcts_cpp import MonteCarloTreeSearchCpp
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # don't know whats happening
@@ -11,13 +12,9 @@ from jass.agents.agent import Agent
 from jass.game.const import PUSH, color_of_card, offset_of_card, UNE_UFE, OBE_ABE, trump_ints
 from jass.game.game_observation import GameObservation
 from jass.game.game_sim import GameSim
-from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
-from jass.game.rule_schieber import RuleSchieber
 from tensorflow import keras
 import tensorflow as tf
-from mcts.hand_sampler import HandSampler
-from mcts.mcts import MonteCarloTreeSearch
 
 
 # Trump selection:  by assigning a value to each card, depending on whether the color is trump or not.
@@ -35,12 +32,13 @@ class DeterminizationCppMCTSAgent(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self, threads=100, cutoff_time=1.0, model_location=""):
+    def __init__(self, determinizations=100, cutoff_time=1.0, model_location="", iterations=200):
         super().__init__()
         # we need a rule object to determine the valid cards
         self._rule = jasscpp.RuleSchieberCpp()
-        self._threads = threads
+        self.determinizations = determinizations
         self._cutoff_time = cutoff_time
+        self._iterations = iterations
 
         if os.path.exists(model_location):
             self._model = keras.models.load_model(model_location)
@@ -98,55 +96,59 @@ class DeterminizationCppMCTSAgent(Agent):
         """
 
         # instantly return if only one card is valid to play
-        cpp_obs = jasscpp.GameObservationCpp()
-        cpp_obs.dealer = game_obs.dealer
-        cpp_obs.player = game_obs.player
-        cpp_obs.trump = game_obs.trump
-        cpp_obs.declared_trump_player = game_obs.declared_trump
-        cpp_obs.forehand = game_obs.forehand
-        cpp_obs.hand = game_obs.hand
-        cpp_obs.tricks = game_obs.tricks
-        cpp_obs.trick_winner = game_obs.trick_winner
-        cpp_obs.trick_first_player = game_obs.trick_first_player
-        cpp_obs.trick_points = game_obs.trick_points
-        cpp_obs.nr_cards_in_trick = game_obs.nr_cards_in_trick
-        cpp_obs.nr_played_cards = game_obs.nr_played_cards
-        cpp_obs.points = game_obs.points
 
-        # TODO weird not sure if works like that
-        cpp_obs.current_trick = game_obs.nr_tricks
+        cpp_obs = DeterminizationCppMCTSAgent.__to_cpp_obs(game_obs)
 
         valid_cards = self._rule.get_valid_cards_from_obs(cpp_obs)
         if np.count_nonzero(valid_cards) == 1:
             print("instant return")
             return int(np.argmax(valid_cards))
-        sampler = HandSampler()
-        # Investigate multiprocessing and thread safety of this return_dict
+
         manager = multiprocessing.Manager()
+
+        available_cards = np.ones(shape=36, dtype=int)
+        played_cards = np.copy(game_obs.tricks)
+        played_cards = np.reshape(played_cards, 36)
+        played_cards = played_cards[played_cards != -1]
+        available_cards = np.ma.masked_where(game_obs.hand == 1, available_cards).filled(0)
+
+        for played in played_cards:
+            available_cards[played] = 0
+
+        hand_sampler = HandSampler2()
+        samples = multiprocessing.Queue(self.determinizations)
+
+        for i in range(self.determinizations):
+            samples.put(hand_sampler.sample(game_obs, np.copy(available_cards)))
+
         mcts_results = manager.dict()
         jobs = []
-        for i in range(self._threads):
+        for i in range(os.cpu_count()+1):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(sampler, cpp_obs, mcts_results, self._cutoff_time))
+                                        args=(samples, cpp_obs, mcts_results, self._cutoff_time,self._iterations))
             jobs.append(p)
             p.start()
 
         for proc in jobs:
             proc.join()
+
         print(mcts_results)
 
         max_card = max(mcts_results, key=mcts_results.get)
         return max_card
 
-    def determinization_and_search(self, sampler, game_obs: jasscpp.GameObservationCpp, mcts_results, cutoff_time):
-        hands_sample = sampler.sample(game_obs)
-        game_sim = DeterminizationCppMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearchCpp().search(game_state=game_sim.state,seconds_limit=cutoff_time)
+    def determinization_and_search(self, samplers: multiprocessing.Queue, game_obs: jasscpp.GameObservationCpp,
+                                   mcts_results, cutoff_time,iterations):
+        while not samplers.empty():
+            hands_sample = samplers.get_nowait()
+            game_sim = DeterminizationCppMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
+            to_play, simulation_cnt = MonteCarloTreeSearchCpp().search(game_sim.state, iterations=iterations,
+                                                                       seconds_limit=cutoff_time)
 
-        if to_play in mcts_results:
-            mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
-        else:
-            mcts_results[to_play] = simulation_cnt
+            if to_play in mcts_results:
+                mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
+            else:
+                mcts_results[to_play] = simulation_cnt
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         result = 0
@@ -162,6 +164,26 @@ class DeterminizationCppMCTSAgent(Agent):
                 result += self.no_trump_score[offset_of_card[card]]
 
         return result
+
+    @staticmethod
+    def __to_cpp_obs(game_obs: GameObservation):
+        cpp_obs = jasscpp.GameObservationCpp()
+        cpp_obs.dealer = game_obs.dealer
+        cpp_obs.player = game_obs.player
+        cpp_obs.trump = game_obs.trump
+        cpp_obs.declared_trump_player = game_obs.declared_trump
+        cpp_obs.forehand = game_obs.forehand
+        cpp_obs.hand = game_obs.hand
+        cpp_obs.tricks = game_obs.tricks
+        cpp_obs.trick_winner = game_obs.trick_winner
+        cpp_obs.trick_first_player = game_obs.trick_first_player
+        cpp_obs.trick_points = game_obs.trick_points
+        cpp_obs.nr_cards_in_trick = game_obs.nr_cards_in_trick
+        cpp_obs.nr_played_cards = game_obs.nr_played_cards
+        cpp_obs.points = game_obs.points
+        # TODO weird not sure if works like that
+        cpp_obs.current_trick = game_obs.nr_tricks
+        return cpp_obs
 
     @staticmethod
     def __create_game_sim_from_obs(game_obs: GameObservation, hands: np.array) -> GameSim:

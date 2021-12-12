@@ -1,5 +1,8 @@
 import multiprocessing
 import os
+
+from mcts.hand_sampler_new import HandSampler2
+
 os.environ["CUDA_VISIBLE_DEVICES"]="-1" # don't know whats happening
 
 import numpy as np
@@ -10,9 +13,8 @@ from jass.game.game_sim import GameSim
 from jass.game.game_state_util import state_from_observation
 from jass.game.game_util import convert_one_hot_encoded_cards_to_int_encoded_list
 from jass.game.rule_schieber import RuleSchieber
-# from tensorflow import keras
-# import tensorflow as tf
-from mcts.hand_sampler import HandSampler
+from tensorflow import keras
+import tensorflow as tf
 from mcts.mcts import MonteCarloTreeSearch
 
 
@@ -38,47 +40,46 @@ class DeterminizationMCTSAgent(Agent):
         self._threads = threads
         self._cutoff_time = cutoff_time
 
-        # if os.path.exists(model_location):
-        #     self._model = keras.models.load_model(model_location)
-        # else:
-        #     print("invalid file location")
-
+        if os.path.exists(model_location):
+            self._model = keras.models.load_model(model_location)
+        else:
+            self._model = None
+            print("invalid file location")
 
     def action_trump(self, obs: GameObservation) -> int:
         """
             Determine trump action for the given observation
             Args:
                 obs: the game observation, it must be in a state for trump selection
-
             Returns:
                 selected trump as encoded in jass.game.const or jass.game.const.PUSH
         """
-        # input = np.append(obs.hand, obs.forehand)
-        # input = input[:, np.newaxis]
-        # output = None
-        # with tf.device('/cpu:0'):
-        #     output = self._model.predict(input.T)
-        # trump = np.argmax(output)
-        # if trump == 6:
-        #     if obs.forehand:
-        #         trump = 10
-        #     else:
-        #         trump = np.argsort(np.max(output, axis=0))[2]
-        # return trump
-        my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
-        trump_score = 0
-        selected_color = -1
-        for color in trump_ints:
-            trump_tmp = self.__calculate_trump_selection_score(my_hand, color)
-            if trump_tmp > trump_score:
-                trump_score = trump_tmp
-                selected_color = color
-
-        if trump_score <= 68:
-            if obs.forehand == -1:
-                return PUSH
-
-        return selected_color
+        if self._model is not None:
+            input = np.append(obs.hand, obs.forehand)
+            input = input[:, np.newaxis]
+            output = None
+            with tf.device('/cpu:0'):
+                output = self._model.predict(input.T)
+            trump = np.argmax(output)
+            if trump == 6:
+                if obs.forehand:
+                    trump = 10
+                else:
+                    trump = np.argsort(np.max(output, axis=0))[2]
+            return trump
+        else:
+            my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
+            trump_score = 0
+            selected_color = -1
+            for color in trump_ints:
+                trump_tmp = self.__calculate_trump_selection_score(my_hand, color)
+                if trump_tmp > trump_score:
+                    trump_score = trump_tmp
+                    selected_color = color
+            if trump_score <= 68:
+                if obs.forehand == -1:
+                    return PUSH
+            return selected_color
 
     def action_play_card(self, game_obs: GameObservation) -> int:
         """
@@ -102,7 +103,7 @@ class DeterminizationMCTSAgent(Agent):
         manager = multiprocessing.Manager()
         mcts_results = manager.dict()
         jobs = []
-        sampler = HandSampler()
+        sampler = HandSampler2()
         for i in range(self._threads):
             p = multiprocessing.Process(target=self.determinization_and_search,
                                         args=(sampler,game_obs, mcts_results, self._cutoff_time))
@@ -118,9 +119,19 @@ class DeterminizationMCTSAgent(Agent):
 
     @staticmethod
     def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
-        hands_sample = sampler.sample(game_obs)
+
+        available_cards = np.ones(shape=36, dtype=int)
+        played_cards = np.copy(game_obs.tricks)
+        played_cards = np.reshape(played_cards, 36)
+        played_cards = played_cards[played_cards != -1]
+        available_cards = np.ma.masked_where(game_obs.hand == 1, available_cards).filled(0)
+
+        for played in played_cards:
+            available_cards[played] = 0
+
+        hands_sample = sampler.sample(game_obs,available_cards)
         game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state,seconds_limit= cutoff_time)
+        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state,iterations=200)
 
         if to_play in mcts_results:
             mcts_results[to_play] = simulation_cnt + mcts_results[to_play]

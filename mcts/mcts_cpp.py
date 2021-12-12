@@ -63,13 +63,15 @@ class MonteCarloTreeSearchCpp:
                 self.__back_propagation(node_to_simulate, score)
         else:
             cut_off_time = time.time() + seconds_limit
+            cnt = 0
             while time.time() < cut_off_time:
+                cnt += 1
                 node_to_simulate = self._tree_policy(tree)
                 # Simulation
                 score = self.__simulate_play(node_to_simulate, game_state.player)
                 # Backpropagation
                 self.__back_propagation(node_to_simulate, score)
-
+            print("Cnt of Iterations: ",cnt)
         node = self.__get_most_simulated_node(tree)
         return card_ids.get(node.get_card()), node.get_simulation_cnt()
 
@@ -96,13 +98,10 @@ class MonteCarloTreeSearchCpp:
         """
         game_sim = jasscpp.GameSimCpp()
         game_sim.state = node.get_state()
-
-
         while not game_sim.is_done():
             valid_actions = np.flatnonzero(game_sim.get_valid_cards())
             action = np.random.choice(valid_actions)
             game_sim.perform_action_play_card(action)
-
 
         if simulating_player % 2 == 0:
             # normalize points

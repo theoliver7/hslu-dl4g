@@ -1,8 +1,4 @@
-import time
-
 import numpy as np
-from jass.game.game_observation import GameObservation
-from jasscpp import GameObservationCpp
 
 
 class HandSampler:
