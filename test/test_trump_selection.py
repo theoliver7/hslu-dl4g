@@ -4,12 +4,10 @@
 #
 
 import logging
-import numpy as np
+
 from jass.arena.arena import Arena
 
 from players.determinization_mcts_agent import DeterminizationMCTSAgent
-from players.dnn_trump_agent import DNNBasedTrumpSelectionAgent
-from players.rule_trump_agent import RuleBasedTrumpSelectionAgent
 
 
 def main():

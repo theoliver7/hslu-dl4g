@@ -1,7 +1,8 @@
 import multiprocessing
 import os
+import queue
 
-from mcts.hand_sampler_new import HandSampler2
+from mcts.hand_sampler_2 import HandSampler2
 from mcts.mcts_cpp import MonteCarloTreeSearchCpp
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # don't know whats happening
@@ -106,20 +107,11 @@ class DeterminizationCppMCTSAgent(Agent):
 
         manager = multiprocessing.Manager()
 
-        available_cards = np.ones(shape=36, dtype=int)
-        played_cards = np.copy(game_obs.tricks)
-        played_cards = np.reshape(played_cards, 36)
-        played_cards = played_cards[played_cards != -1]
-        available_cards = np.ma.masked_where(game_obs.hand == 1, available_cards).filled(0)
-
-        for played in played_cards:
-            available_cards[played] = 0
-
-        hand_sampler = HandSampler2()
+        hand_sampler = HandSampler2(game_obs)
         samples = multiprocessing.Queue(self.determinizations)
 
         for i in range(self.determinizations):
-            samples.put(hand_sampler.sample(game_obs, np.copy(available_cards)))
+            samples.put(hand_sampler.sample())
 
         mcts_results = manager.dict()
         jobs = []
@@ -133,14 +125,19 @@ class DeterminizationCppMCTSAgent(Agent):
             proc.join()
 
         print(mcts_results)
-
         max_card = max(mcts_results, key=mcts_results.get)
         return max_card
 
-    def determinization_and_search(self, samplers: multiprocessing.Queue, game_obs: jasscpp.GameObservationCpp,
+    # This method will be executed in a separate process
+    @staticmethod
+    def determinization_and_search(samplers: multiprocessing.Queue, game_obs: jasscpp.GameObservationCpp,
                                    mcts_results, cutoff_time,iterations):
         while not samplers.empty():
-            hands_sample = samplers.get_nowait()
+            try:
+                hands_sample = samplers.get_nowait()
+            except queue.Empty:
+                continue
+
             game_sim = DeterminizationCppMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
             to_play, simulation_cnt = MonteCarloTreeSearchCpp().search(game_sim.state, iterations=iterations,
                                                                        seconds_limit=cutoff_time)
@@ -181,7 +178,7 @@ class DeterminizationCppMCTSAgent(Agent):
         cpp_obs.nr_cards_in_trick = game_obs.nr_cards_in_trick
         cpp_obs.nr_played_cards = game_obs.nr_played_cards
         cpp_obs.points = game_obs.points
-        # TODO weird not sure if works like that
+        # TODO weird not sure if this is the same
         cpp_obs.current_trick = game_obs.nr_tricks
         return cpp_obs
 

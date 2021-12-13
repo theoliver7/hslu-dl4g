@@ -2,14 +2,13 @@ import time
 
 from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.game.const import card_ids
-from jass.game.game_observation import GameObservation
 from jass.game.game_sim import GameSim
 from jass.game.game_state import GameState
 from jass.game.game_state_util import observation_from_state
 from jass.game.rule_schieber import RuleSchieber
 
-from mcts.mcts_node import MCTSNode
 from mcts.hand_sampler import HandSampler
+from mcts.mcts_node import MCTSNode
 
 
 class MonteCarloTreeSearch:

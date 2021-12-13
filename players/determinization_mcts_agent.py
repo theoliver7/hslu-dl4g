@@ -1,9 +1,9 @@
 import multiprocessing
 import os
 
-from mcts.hand_sampler_new import HandSampler2
+from mcts.hand_sampler_2 import HandSampler2
 
-os.environ["CUDA_VISIBLE_DEVICES"]="-1" # don't know whats happening
+# os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # don't know whats happening
 
 import numpy as np
 from jass.agents.agent import Agent
@@ -33,12 +33,13 @@ class DeterminizationMCTSAgent(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self, threads=100, cutoff_time=1.0,model_location = ""):
+    def __init__(self, determinizations=100, cutoff_time=1.0, model_location="", iterations=200):
         super().__init__()
         # we need a rule object to determine the valid cards
         self._rule = RuleSchieber()
-        self._threads = threads
+        self._determinizations = determinizations
         self._cutoff_time = cutoff_time
+        self._iterations = iterations
 
         if os.path.exists(model_location):
             self._model = keras.models.load_model(model_location)
@@ -83,55 +84,53 @@ class DeterminizationMCTSAgent(Agent):
 
     def action_play_card(self, game_obs: GameObservation) -> int:
         """
-        Determine the card to play for this trick with the minmax algorithm
+        Determine the card to play for this trick with a Monte Carlo Tree Search with Determinizations
 
         Args:
-            state: the game state where all hands of all players can be seen
+            game_obs: the game state where all hands of all players can be seen
 
         Returns:
             the card to play, int encoded as defined in jass.game.const
         """
 
         # instantly return if only one card is valid to play
-
         valid_cards = self._rule.get_valid_cards_from_obs(game_obs)
         if np.count_nonzero(valid_cards) == 1:
             print("instant return")
             return int(np.argmax(valid_cards))
 
-        # Investigate multiprocessing and thread safety of this return_dict
         manager = multiprocessing.Manager()
+
+        hand_sampler = HandSampler2(game_obs)
+        samples = multiprocessing.Queue(self._determinizations)
+
+        for i in range(self._determinizations):
+            samples.put(hand_sampler.sample())
+
         mcts_results = manager.dict()
         jobs = []
-        sampler = HandSampler2()
-        for i in range(self._threads):
+        for i in range(os.cpu_count() + 1):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(sampler,game_obs, mcts_results, self._cutoff_time))
+                                        args=(samples, game_obs, mcts_results, self._cutoff_time, self._iterations))
             jobs.append(p)
             p.start()
 
         for proc in jobs:
             proc.join()
-        print(mcts_results)
 
+        print(mcts_results)
         max_card = max(mcts_results, key=mcts_results.get)
         return max_card
 
+    # This method will be executed in a separate process
     @staticmethod
-    def determinization_and_search(sampler, game_obs, mcts_results, cutoff_time):
+    def determinization_and_search(sampler: HandSampler2, game_obs: GameObservation, mcts_results: dict, cutoff_time,
+                                   iterations):
+        hands_sample = sampler.sample()
 
-        available_cards = np.ones(shape=36, dtype=int)
-        played_cards = np.copy(game_obs.tricks)
-        played_cards = np.reshape(played_cards, 36)
-        played_cards = played_cards[played_cards != -1]
-        available_cards = np.ma.masked_where(game_obs.hand == 1, available_cards).filled(0)
-
-        for played in played_cards:
-            available_cards[played] = 0
-
-        hands_sample = sampler.sample(game_obs,available_cards)
         game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state,iterations=200)
+        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state, seconds_limit=cutoff_time,
+                                                                iterations=iterations)
 
         if to_play in mcts_results:
             mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
@@ -150,7 +149,6 @@ class DeterminizationMCTSAgent(Agent):
                 result += self.uneufe_score[offset_of_card[card]]
             else:
                 result += self.no_trump_score[offset_of_card[card]]
-
         return result
 
     @staticmethod
