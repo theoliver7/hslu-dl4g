@@ -40,10 +40,10 @@ def create_app():
     app.add_player('dmcts0', DeterminizationMCTSAgent(threads=100, cutoff_time=1.0))
     app.add_player('dmcts1', DeterminizationMCTSAgent(threads=100, cutoff_time=1.0))
 
-    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=100, iterations=300))
-    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=200, iterations=300))
-    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=300, iterations=300))
-    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=400, iterations=300))
+    app.add_player('dmcts2', DeterminizationCppMCTSAgent(determinizations=100, cutoff_time=0.9,model_location="/home/localadmin/dl4g/notebooks/models/v7"))
+    app.add_player('dmcts3', DeterminizationCppMCTSAgent(determinizations=200, cutoff_time=0.4,model_location="/home/localadmin/dl4g/notebooks/models/v7"))
+    app.add_player('dmcts4', DeterminizationCppMCTSAgent(determinizations=300, cutoff_time=0.2,model_location="/home/localadmin/dl4g/notebooks/models/v7"))
+    app.add_player('dmcts5', DeterminizationCppMCTSAgent(determinizations=400, cutoff_time=0.1,model_location="/home/localadmin/dl4g/notebooks/models/v7"))
 
     app.add_player('imcts0', InformationSetMCTSAgent(iterations=1000))
     app.add_player('imcts1', InformationSetMCTSAgent(iterations=2000))

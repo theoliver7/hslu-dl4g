@@ -1,9 +1,7 @@
-import random
 import time
 
 import jasscpp
 import numpy as np
-from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.game.const import card_ids
 from jass.game.game_state_util import observation_from_state
 
@@ -63,15 +61,12 @@ class MonteCarloTreeSearchCpp:
                 self.__back_propagation(node_to_simulate, score)
         else:
             cut_off_time = time.time() + seconds_limit
-            cnt = 0
             while time.time() < cut_off_time:
-                cnt += 1
                 node_to_simulate = self._tree_policy(tree)
                 # Simulation
                 score = self.__simulate_play(node_to_simulate, game_state.player)
                 # Backpropagation
                 self.__back_propagation(node_to_simulate, score)
-            print("Cnt of Iterations: ",cnt)
         node = self.__get_most_simulated_node(tree)
         return card_ids.get(node.get_card()), node.get_simulation_cnt()
 

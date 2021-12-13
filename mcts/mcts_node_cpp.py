@@ -1,13 +1,10 @@
 from __future__ import annotations  # import to allow self referencing type
 
-import copy
-
 import jasscpp
 import numpy as np
 from jass.game.const import card_ids
 from jass.game.game_util import convert_one_hot_encoded_cards_to_str_encoded_list
-from jass.game.rule_schieber import RuleSchieber
-from jasscpp import GameStateCpp, GameSimCpp, RuleSchieberCpp
+from jasscpp import GameStateCpp, GameSimCpp
 
 
 class MCTSNodeCpp:
