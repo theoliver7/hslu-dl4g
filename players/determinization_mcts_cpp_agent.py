@@ -68,7 +68,7 @@ class DeterminizationCppMCTSAgent(Agent):
                     trump = 10
                 else:
                     trump = np.argsort(np.max(output, axis=0))[2]
-            return trump
+            return trump.item()
         else:
             my_hand = convert_one_hot_encoded_cards_to_int_encoded_list(obs.hand)
             trump_score = 0
