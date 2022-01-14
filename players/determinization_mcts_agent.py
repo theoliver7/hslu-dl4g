@@ -1,5 +1,7 @@
 import multiprocessing
 import os
+import queue
+from queue import Queue
 
 from mcts.hand_sampler_2 import HandSampler2
 
@@ -124,18 +126,21 @@ class DeterminizationMCTSAgent(Agent):
 
     # This method will be executed in a separate process
     @staticmethod
-    def determinization_and_search(sampler: HandSampler2, game_obs: GameObservation, mcts_results: dict, cutoff_time,
+    def determinization_and_search(sampler: Queue, game_obs: GameObservation, mcts_results: dict, cutoff_time,
                                    iterations):
-        hands_sample = sampler.sample()
+        while not sampler.empty():
+            try:
+                hands_sample = sampler.get_nowait()
+            except queue.Empty:
+                continue
+            game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
+            to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state, seconds_limit=cutoff_time,
+                                                                    iterations=iterations)
 
-        game_sim = DeterminizationMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
-        to_play, simulation_cnt = MonteCarloTreeSearch().search(game_state=game_sim.state, seconds_limit=cutoff_time,
-                                                                iterations=iterations)
-
-        if to_play in mcts_results:
-            mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
-        else:
-            mcts_results[to_play] = simulation_cnt
+            if to_play in mcts_results:
+                mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
+            else:
+                mcts_results[to_play] = simulation_cnt
 
     def __calculate_trump_selection_score(self, cards, trump: int) -> int:
         result = 0

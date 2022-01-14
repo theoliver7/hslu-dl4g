@@ -5,6 +5,7 @@
 
 import logging
 
+from jass.agents.agent_random_schieber import AgentRandomSchieber
 from jass.arena.arena import Arena
 
 from players.determinization_mcts_agent import DeterminizationMCTSAgent
@@ -18,14 +19,9 @@ def main():
     # setup the arena
     arena = Arena(nr_games_to_play=10)
 
-    team0 = DeterminizationCppMCTSAgent(determinizations=100, cutoff_time=0.9)
-    team1 = DeterminizationCppMCTSAgent(determinizations=200, cutoff_time=0.35)
-    DeterminizationCppMCTSAgent(determinizations=300,
-                                cutoff_time=0.18,
-                                model_location="/home/localadmin/dl4g/notebooks/models/v7")
-    DeterminizationCppMCTSAgent(determinizations=390,
-                                cutoff_time=0.1,
-                                model_location="/home/localadmin/dl4g/notebooks/models/v7")
+    team0 = AgentRandomSchieber()
+    team1 = DeterminizationCppMCTSAgent(determinizations=200, iterations=0.4,c=2)
+
 
     # team0 = InformationSetMCTSAgent(700)
     # team0 = DeterminizationMCTSAgent(threads=1, cutoff_time=0.2, )
