@@ -39,7 +39,7 @@ class MonteCarloTreeSearchCpp:
         node = self.__get_most_simulated_node(rootnode)
         return card_ids.get(node.get_card())
 
-    def search(self, game_state: jasscpp.GameStateCpp, iterations=300, seconds_limit=0.0):
+    def search(self, game_state: jasscpp.GameStateCpp, iterations=300, seconds_limit=0.0,c=np.sqrt(2)):
         """
         Determine the card to play after analysis of all hands of the players
         Args:
@@ -49,6 +49,7 @@ class MonteCarloTreeSearchCpp:
         Returns:
             Best card to play according to mcts
         """
+        self._c = c
         tree = MCTSNodeCpp(state=game_state)
 
         if seconds_limit == 0.0:
@@ -81,7 +82,7 @@ class MonteCarloTreeSearchCpp:
             if not current_node.is_fully_expanded():
                 return current_node.expand()
             else:
-                current_node = current_node.best_child_ubc()
+                current_node = current_node.best_child_ubc(self._c)
         return current_node
 
     def __simulate_play(self, node: MCTSNodeCpp, simulating_player: int):

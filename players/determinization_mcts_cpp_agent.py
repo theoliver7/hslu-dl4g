@@ -33,14 +33,14 @@ class DeterminizationCppMCTSAgent(Agent):
     # score if uneufe is selected (all colors)
     uneufe_score = [0, 2, 1, 1, 5, 5, 7, 9, 11]
 
-    def __init__(self, determinizations=100, cutoff_time=1.0, model_location="", iterations=200):
+    def __init__(self, determinizations=100, cutoff_time=1.0, model_location="", iterations=200,c=np.sqrt(2)):
         super().__init__()
         # we need a rule object to determine the valid cards
         self._rule = jasscpp.RuleSchieberCpp()
         self.determinizations = determinizations
         self._cutoff_time = cutoff_time
         self._iterations = iterations
-
+        self._c =c
         if os.path.exists(model_location):
             self._model = keras.models.load_model(model_location)
         else:
@@ -117,7 +117,7 @@ class DeterminizationCppMCTSAgent(Agent):
         jobs = []
         for i in range(os.cpu_count()+1):
             p = multiprocessing.Process(target=self.determinization_and_search,
-                                        args=(samples, cpp_obs, mcts_results, self._cutoff_time,self._iterations))
+                                        args=(samples, cpp_obs, mcts_results, self._cutoff_time,self._iterations,self._c))
             jobs.append(p)
             p.start()
 
@@ -131,7 +131,7 @@ class DeterminizationCppMCTSAgent(Agent):
     # This method will be executed in a separate process
     @staticmethod
     def determinization_and_search(samplers: multiprocessing.Queue, game_obs: jasscpp.GameObservationCpp,
-                                   mcts_results, cutoff_time,iterations):
+                                   mcts_results, cutoff_time,iterations,c):
         while not samplers.empty():
             try:
                 hands_sample = samplers.get_nowait()
@@ -140,7 +140,7 @@ class DeterminizationCppMCTSAgent(Agent):
 
             game_sim = DeterminizationCppMCTSAgent.__create_game_sim_from_obs(game_obs, hands_sample)
             to_play, simulation_cnt = MonteCarloTreeSearchCpp().search(game_sim.state, iterations=iterations,
-                                                                       seconds_limit=cutoff_time)
+                                                                       seconds_limit=cutoff_time,c=c)
 
             if to_play in mcts_results:
                 mcts_results[to_play] = simulation_cnt + mcts_results[to_play]
